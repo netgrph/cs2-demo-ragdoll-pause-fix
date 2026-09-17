@@ -28,3 +28,6 @@ research/data/
 # Packaged downloads. They are built from addon/release/ and attached to the GitHub
 # release, never committed.
 dist/
+
+# Research paper, RE notes and analysis tools - kept locally, not published.
+research/
