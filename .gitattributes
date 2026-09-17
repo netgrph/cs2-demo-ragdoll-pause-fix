@@ -1,0 +1,15 @@
+# Let git normalise line endings for text files.
+* text=auto
+
+# Windows batch files must keep CRLF or cmd.exe can choke on them.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binary files: never touch these.
+*.dll binary
+*.pdb binary
+*.bin binary
+*.png binary
+
+# Big generated reports and traces: keep them out of diffs.
+research/data/** -diff
