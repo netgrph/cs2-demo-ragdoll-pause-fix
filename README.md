@@ -40,6 +40,13 @@ Pause, unpause, tick stepping, demo speed and `cl_phys_timescale` all keep worki
 | `mirv_ragdollfix resync <2-6400>` | demo time jumps bigger than this many ticks re-sync the clock instead of fast-forwarding (default 16) |
 | `mirv_ragdollfix verbose <0\|1>` | print pause / resume / seek messages (default 0) |
 
+## Comparison
+
+![Ragdoll physics before and after the fix, while the demo is paused](media/pause-comparison.gif)
+
+With `mirv_ragdollfix` active, the ragdoll holds still the whole time the demo is paused, instead of drifting and settling into a
+different pose by the time you unpause.
+
 ## Disclaimer
 
 Almost this entire project was created with AI assistance. I do not take credit in any way for creating it.
