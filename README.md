@@ -4,6 +4,11 @@ In Counter-Strike 2 demos, ragdolls keep falling while the demo is paused. The p
 physics keeps running in the background. As soon as you unpause, the body jumps to wherever the physics took it. That makes
 frame-by-frame work (HLAE camera keyframes, screenshots, edits) painful.
 
+https://github.com/user-attachments/assets/796e65c6-c8ac-4529-a0a7-250e2dea591f
+
+*Video from [ValveSoftware/csgo-osx-linux#4405](https://github.com/ValveSoftware/csgo-osx-linux/issues/4405), the bug report for
+this behaviour.*
+
 This is a small DLL for [HLAE](https://github.com/advancedfx/advancedfx). It loads next to `AfxHookSource2.dll`, adds the console
 command `mirv_ragdollfix`, and makes ragdoll physics follow demo time: the demo is paused, so the physics is paused too.
 
