@@ -24,3 +24,7 @@ research/data/
 *.log
 *.csv
 *.report.txt
+
+# Packaged downloads. They are built from addon/release/ and attached to the GitHub
+# release, never committed.
+dist/
