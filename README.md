@@ -9,42 +9,20 @@ command `mirv_ragdollfix`, and makes ragdoll physics follow demo time: the demo 
 
 Pause, unpause, tick stepping, demo speed and `cl_phys_timescale` all keep working as normal.
 
-## Download
-
-Get `RagdollPauseFix.dll` from the **Releases** page. It is one file with no dependencies. (You can also build it yourself —
-see [`addon/source/`](addon/source/).)
-
 ## How to use it
 
 1. Open HLAE.
 2. Menu: **Tools → Developer → Custom Loader**.
-3. **ProgramPath**: your `cs2.exe`, normally
-   `C:\Program Files (x86)\Steam\steamapps\common\Counter-Strike Global Offensive\game\bin\win64\cs2.exe`
-4. **CommandLine**: `-steam -insecure`
-5. **Environment variables**:
+3. **DLLs to inject**, in this order:
    ```
-   SteamPath=C:\Program Files (x86)\Steam
-   SteamClientLaunch=1
-   SteamGameId=730
-   SteamAppId=730
-   SteamOverlayGameId=730
+   x64\AfxHookSource2.dll
+   RagdollPauseFix.dll
    ```
-6. **DLLs to inject**, in this order:
-   ```
-   <your HLAE folder>\x64\AfxHookSource2.dll
-   <where you put it>\RagdollPauseFix.dll
-   ```
-7. Start CS2, play a demo, and type in the console:
+4. Start CS2, play a demo, and type in the console:
    ```
    mirv_ragdollfix status
    ```
    It should say `ACTIVE`. That's it — pausing now freezes ragdolls.
-
-Already running CS2 through HLAE? Then you can also load it live:
-
-```
-mirv_loadlibrary "<where you put it>\RagdollPauseFix.dll"
-```
 
 ## Console commands
 
@@ -66,26 +44,6 @@ really advances, and nothing we could call while paused makes that happen. The w
 
 Everything else — pausing on a body that is already lying there, stepping ticks, changing speed — is stable.
 
-## What's in this repository
+## Disclaimer
 
-```
-addon/release/   where the DLL lands (the binary itself ships as a release, not in git)
-addon/source/    its source code and a build script
-research/        the paper, the research code and the analysis tools
-```
-
-## Safety
-
-- The DLL does nothing unless it is inside `cs2.exe`, and only acts during demo playback.
-- It checks the game's structures before hooking anything. If a CS2 update moves them, it switches itself off and tells you, instead
-  of crashing.
-- It changes nothing on disk and nothing in your game files.
-- Use it on demos, with `-insecure`, like the rest of HLAE. It is not meant for live matchmaking.
-
-## License
-
-None. No license file was added on purpose — the author has not picked one yet.
-
-## Credits
-
-Built as a research project against CS2 build `client.dll 0x6aa1ae5e` with HLAE 2.192.2.
+Almost this entire project was created with AI assistance. I do not take credit in any way for creating it.
