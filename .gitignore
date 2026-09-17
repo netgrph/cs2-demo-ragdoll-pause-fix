@@ -1,0 +1,26 @@
+# Build output
+build/
+bin/
+*.obj
+*.ilk
+*.exp
+*.lib
+*.pdb
+*.res
+
+# Python
+__pycache__/
+*.pyc
+
+# The built DLL is not committed - it is attached to the GitHub release.
+*.dll
+addon/release/*.dll
+
+# Measurement data stays out of the repository: the recordings are 23 MB - 2.33 GB
+# binary memory dumps and their derived traces/reports run to tens of MB.
+# PAPER.md documents what they contain; research/tools/ can read them.
+research/data/
+*.bin
+*.log
+*.csv
+*.report.txt
