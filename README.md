@@ -1,12 +1,12 @@
 # CS2 Ragdoll Pause Fix
 
-In Counter-Strike 2 demos, ragdolls keep falling while the demo is paused. The picture is frozen, so you don't see it, but the
-physics keeps running in the background. As soon as you unpause, the body jumps to wherever the physics took it. That makes
-frame-by-frame work (HLAE camera keyframes, screenshots, edits) painful.
+In Counter-Strike 2 demos, ragdolls keep falling while the demo is paused.
+As soon as you unpause, the body jumps to wherever the physics took it. 
+That makes any form of Recording/Editing work (HLAE camera keyframes, screenshots, edits) painful.
 
 https://github.com/user-attachments/assets/796e65c6-c8ac-4529-a0a7-250e2dea591f
 
-*Video from [ValveSoftware/csgo-osx-linux#4405](https://github.com/ValveSoftware/csgo-osx-linux/issues/4405), the bug report for
+*Video from [ValveSoftware/csgo-osx-linux#4405](https://github.com/ValveSoftware/csgo-osx-linux/issues/4405), the acknowledged bug report for
 this behaviour.*
 
 This is a small DLL for [HLAE](https://github.com/advancedfx/advancedfx). It loads next to `AfxHookSource2.dll`, adds the console
@@ -27,7 +27,7 @@ Pause, unpause, tick stepping, demo speed and `cl_phys_timescale` all keep worki
    ```
    mirv_ragdollfix status
    ```
-   It should say `ACTIVE`. That's it — pausing now freezes ragdolls.
+   It should say `ACTIVE`.
 
 ## Console commands
 
@@ -39,15 +39,6 @@ Pause, unpause, tick stepping, demo speed and `cl_phys_timescale` all keep worki
 | `mirv_ragdollfix catchup <1-16>` | how many physics steps one engine tick may catch up with (default 4) |
 | `mirv_ragdollfix resync <2-6400>` | demo time jumps bigger than this many ticks re-sync the clock instead of fast-forwarding (default 16) |
 | `mirv_ragdollfix verbose <0\|1>` | print pause / resume / seek messages (default 0) |
-
-## What it does not fix
-
-If you **seek across a death** (the player is alive at the old tick and dead at the new one), the game rebuilds the ragdoll from
-scratch and it still moves once you unpause. We measured why: the bones only take their pose from the physics bodies when demo time
-really advances, and nothing we could call while paused makes that happen. The whole investigation is written up in
-[`research/PAPER.md`](research/PAPER.md).
-
-Everything else — pausing on a body that is already lying there, stepping ticks, changing speed — is stable.
 
 ## Disclaimer
 
