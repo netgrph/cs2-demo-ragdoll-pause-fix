@@ -26,12 +26,12 @@ command `mirv_ragdollfix`, and makes ragdoll physics follow demo time: the demo 
    x64\AfxHookSource2.dll
    RagdollPauseFix.dll
    ```
-4. Start CS2, play a demo, and type in the console:
+4. Start CS2 and play a demo. The fix is enabled automatically.  
+To check whether the DLL loaded correctly, enter:  
    ```
    mirv_ragdollfix status
    ```
-   It should say `ACTIVE`.
-
+   
 ## Console commands
 
 | Command | What it does |
