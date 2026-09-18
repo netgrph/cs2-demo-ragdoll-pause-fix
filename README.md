@@ -53,6 +53,7 @@ different pose by the time you unpause.
 ## HOW TO FIX FAST FALLING RAGDOLLS
 
 There is currently an additional bug that causes ragdolls to fall significantly faster than they should.  
+
 Since this project, in its current state, does not address that issue, here is a workaround to make them behave normally again:
 
 ```
@@ -60,6 +61,15 @@ mirv_cvar_unhide_all;
 mirv_cvar_unlock_sv_cheats;
 cl_phys_timescale 0.5
 ```
+
+<details>
+<summary>Video Showcasing the Issue</summary>
+
+https://github.com/user-attachments/assets/e6a549bc-0e41-4090-bfdb-08b40d7cb338
+
+*Video from [ValveSoftware/csgo-osx-linux#4403](https://github.com/ValveSoftware/csgo-osx-linux/issues/4403)*
+
+</details>
 
 ## Compatibility
 
