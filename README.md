@@ -12,7 +12,10 @@ this behaviour.*
 This is a small DLL for [HLAE](https://github.com/advancedfx/advancedfx). It loads next to `AfxHookSource2.dll`, adds the console
 command `mirv_ragdollfix`, and makes ragdoll physics follow demo time: the demo is paused, so the physics is paused too.
 
-Pause, unpause, tick stepping, demo speed and `cl_phys_timescale` all keep working as normal.
+> ⚠️ **Ragdolls falling too fast?**
+>
+> There is a separate CS2 bug that causes ragdolls to fall significantly faster than they should.  
+> **[See the workaround →](#how-to-fix-fast-falling-ragdolls)**
 
 ## How to use it
 
@@ -42,10 +45,27 @@ Pause, unpause, tick stepping, demo speed and `cl_phys_timescale` all keep worki
 
 ## Comparison
 
-![Ragdoll physics before and after the fix, while the demo is paused](media/pause-comparison.gif)
+<img src="media/pause-comparison.gif" alt="Ragdoll physics before and after the fix, while the demo is paused" width="50%">
 
 With `mirv_ragdollfix` active, the ragdoll holds still the whole time the demo is paused, instead of drifting and settling into a
 different pose by the time you unpause.
+
+## HOW TO FIX FAST FALLING RAGDOLLS
+
+There is currently an additional bug that causes ragdolls to fall significantly faster than they should.  
+Since this project, in its current state, does not address that issue, here is a workaround to make them behave normally again:
+
+```
+mirv_cvar_unhide_all;
+mirv_cvar_unlock_sv_cheats;
+cl_phys_timescale 0.5
+```
+
+## Compatibility
+
+Confirmed to work on the current **September 10, 2026** build of the game.
+
+I have not tested this on older game versions, so I cannot confirm that everything works correctly on them.
 
 ## Disclaimer
 
