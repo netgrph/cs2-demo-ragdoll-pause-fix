@@ -29,13 +29,11 @@
 
 namespace {
 
-constexpr const char* kVersion = "1.0.0";
+constexpr const char* kVersion = "1.0.1";
 constexpr const char* kCommandName = "mirv_ragdollfix";
 
-// Builds this fix was tested on (PE TimeDateStamp). Other builds run only if the structural self-check passes.
-constexpr uint32_t kClientStamp = 0x6aa1ae5e;
-constexpr uint32_t kEngine2Stamp = 0x6aa1ae4f;
-constexpr uint32_t kVphysics2Stamp = 0x6aa1add2;
+// There is no game version check. Every CS2 build gets the same structural self-check: parts the fix cannot work without fail with
+// a CRITICAL ERROR (fix off, vanilla physics), optional parts only print a WARNING and the fix keeps working with less.
 
 // Game layout (engine2/client/vphysics2 from our own analysis, cvar system as used by HLAE 2.192.2).
 constexpr int kEngIsPlayingDemo = 42, kEngGetDemoFile = 69;  // Source2EngineToClient001
@@ -47,9 +45,13 @@ constexpr uintptr_t kCvarValue = 0x58;          // convar data: float value
 constexpr uintptr_t kCommandArgc = 0x438, kCommandArgv = 0x440;  // CCommand
 constexpr double kTicksPerSecond = 64.0;
 
-// client.dll: function that reads the globals pointer (rel32 at +0x36, next instruction at +0x3a).
-constexpr const char* kSigGlobals = "40 53 48 83 EC 20 0F B6 D9 BA FF FF FF FF 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 85 C0 75 0B 48 8B 05 ?? "
-                                    "?? ?? ?? 48 8B 40 08 80 38 00 75 16 84 DB 75 12 48 8B 05 ?? ?? ?? ?? F3 0F 10 40 34";
+// client.dll: short instruction patterns that use the globals pointer (rel32 at +3, next instruction at +7). Each one occurs many
+// times; the address most matches agree on is the globals pointer. Tried in order, so the second only matters if the first fails.
+constexpr const char* kSigGlobals[] = {
+    "48 8B 05 ?? ?? ?? ?? F3 0F 10 40 34",  // mov rax, [globals] ; movss xmm0, [rax+34h]   (physics frame time)
+    "48 89 15 ?? ?? ?? ?? 48 89 42",        // mov [globals], rdx ; mov [rdx+..], rax        (where the pointer is set)
+};
+constexpr int kMaxDemoTick = 50000000;  // over 200 hours at 64 ticks/s: a demo tick beyond this means the demo interface changed
 
 // ---------------------------------------------------------------------------------------------------------- output
 
@@ -125,13 +127,14 @@ size_t ParseSig(const char* sig, int* pat, size_t cap) {
   return len;
 }
 
-uintptr_t FindSig(HMODULE m, const char* sig) {
+// First match of a signature in the module's .text at or after `from` (0 = from the start).
+uintptr_t FindSig(HMODULE m, const char* sig, uintptr_t from = 0) {
   int pat[256];
   const size_t len = ParseSig(sig, pat, 256);
   Range t = SectionRange(m, ".text");
   if (!t.b || !len) return 0;
   const uint8_t* d = (const uint8_t*)t.b;
-  for (size_t i = 0; i + len <= t.n; ++i) {
+  for (size_t i = from > t.b ? from - t.b : 0; i + len <= t.n; ++i) {
     size_t j = 0;
     for (; j < len; ++j)
       if (pat[j] >= 0 && d[i + j] != (uint8_t)pat[j]) break;
@@ -140,11 +143,29 @@ uintptr_t FindSig(HMODULE m, const char* sig) {
   return 0;
 }
 
-// Address stored in a RIP-relative instruction found by a signature: rel32 at hit + relAt, relative to hit + nextAt.
-uintptr_t SigTarget(HMODULE m, const char* sig, uintptr_t relAt, uintptr_t nextAt) {
-  const uintptr_t hit = FindSig(m, sig);
-  int32_t d = 0;
-  return hit && Rd(hit + relAt, d) ? hit + nextAt + d : 0;
+// The address most matches of a signature point to with their RIP-relative operand (rel32 at hit + 3, next instruction at hit + 7).
+uintptr_t SigVote(HMODULE m, const char* sig, int& votes) {
+  constexpr int kMax = 32;
+  uintptr_t addr[kMax];
+  int count[kMax], n = 0;
+  votes = 0;
+  for (uintptr_t hit = FindSig(m, sig); hit; hit = FindSig(m, sig, hit + 1)) {
+    int32_t d = 0;
+    if (!Rd(hit + 3, d)) continue;
+    const uintptr_t a = hit + 7 + d;
+    int i = 0;
+    while (i < n && addr[i] != a) ++i;
+    if (i == n) {
+      if (n == kMax) continue;
+      addr[n] = a;
+      count[n++] = 0;
+    }
+    ++count[i];
+  }
+  uintptr_t best = 0;
+  for (int i = 0; i < n; ++i)
+    if (count[i] > votes) votes = count[i], best = addr[i];
+  return best;
 }
 
 void* Iface(const char* mod, const char* name) {
@@ -202,15 +223,26 @@ constexpr int kSuspectJumpTicks = 4096;  // a demo tick jump this large is only 
 
 enum Health { kInit = 0, kReady = 1, kDisabled = 2 };
 std::atomic<int> g_health{kInit};
-std::atomic<bool> g_buildVerified{false};
 std::atomic<const char*> g_waitingFor{"tier0.dll"};
 char g_disableReason[256] = "";
 
-void Disable(const char* why) {
+// A part the fix cannot work without is missing or changed: switch off for good (vanilla CS2 physics) and say which part.
+void Critical(const char* what) {
   if (g_health.exchange(kDisabled) == kDisabled) return;
-  snprintf(g_disableReason, sizeof(g_disableReason), "%s", why);
-  Con("DISABLED: %s\n", why);
-  Con("CS2 physics now run unmodified. The game was probably updated and this version of the fix needs an update.\n");
+  snprintf(g_disableReason, sizeof(g_disableReason), "%s", what);
+  Con("CRITICAL ERROR: %s\n", what);
+  Con("The fix is OFF, CS2 physics run unmodified. A CS2 update changed a part this fix depends on, so the fix needs an update.\n");
+}
+
+// Optional part: the client globals give the fraction of the current demo tick. Without them the fix still freezes paused ragdolls,
+// but physics only advance on whole demo ticks (can look choppy in slow motion).
+std::atomic<bool> g_fracOk{true};
+constexpr const char* kNoFracEffect = "the fix keeps working, but physics only advance on whole demo ticks (can look choppy in slow "
+                                      "motion)";
+
+void LoseFrac(const char* why) {
+  if (!g_fracOk.exchange(false)) return;
+  Con("WARNING: %s - %s\n", why, kNoFracEffect);
 }
 
 // ---------------------------------------------------------------------------------------------------------- game access
@@ -254,36 +286,52 @@ bool ReadDemoRaw(DemoView& v) {
     }
     v.paused = ((bool (*)(void*))Vt(d)[kDemoIsPaused])(d);
     v.tick = ((int (*)(void*))Vt(d)[kDemoGetTick])(d);
-    uintptr_t gl = *(uintptr_t*)g_globalsVar;
-    v.frac = gl ? *(float*)(gl + kGlobalsInterpFrac) : 0.0f;
     return true;
   } __except (EXCEPTION_EXECUTE_HANDLER) {
     return false;
   }
 }
 
-int g_badFracRun = 0;
+float ReadFracRaw() {
+  __try {
+    const uintptr_t gl = *(uintptr_t*)g_globalsVar;
+    return gl ? *(float*)(gl + kGlobalsInterpFrac) : 0.0f;
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    return -1.0f;
+  }
+}
+
+int g_badFracRun = 0, g_badTickRun = 0;
 
 bool ReadDemo(DemoView& v) {
   if (!ReadDemoRaw(v)) {
-    Disable("reading the demo state crashed (engine interface changed)");
+    Critical("engine demo interface changed (reading the demo state crashed)");
     return false;
   }
   if (v.badLayout) {
-    Disable("the demo file object does not look like the analysed one (engine2 layout changed)");
+    Critical("engine demo interface changed (the demo file object has a different layout)");
     return false;
   }
   if (!v.playing) return true;
-  if (!std::isfinite(v.frac) || v.frac < -0.001f || v.frac > 1.001f) {
-    if (++g_badFracRun > 256) {
-      Disable("the tick interpolation fraction is out of range (client globals layout changed)");
+  if (v.tick < -1 || v.tick > kMaxDemoTick) {
+    if (++g_badTickRun > 256) {
+      Critical("engine demo interface changed (the demo tick reads as nonsense)");
       return false;
     }
-    v.frac = 0.0f;
-  } else {
-    g_badFracRun = 0;
+    v.tick = -1;  // treated as "not playing yet" until it reads sensibly again
+    return true;
   }
-  v.frac = (std::min)((std::max)(v.frac, 0.0f), 0.999999f);
+  g_badTickRun = 0;
+  v.frac = 0.0f;
+  if (g_fracOk.load(std::memory_order_relaxed) && g_globalsVar) {
+    const float f = ReadFracRaw();
+    if (!std::isfinite(f) || f < -0.001f || f > 1.001f) {
+      if (++g_badFracRun > 256) LoseFrac("client globals changed (the demo tick fraction reads as nonsense)");
+    } else {
+      g_badFracRun = 0;
+      v.frac = (std::min)((std::max)(f, 0.0f), 0.999999f);
+    }
+  }
   return true;
 }
 
@@ -554,6 +602,13 @@ void* ClockStep(const DemoView& v, void* self, void** worlds, int count, float d
 }
 
 std::atomic<int> g_physCvarTries{0};
+int g_badStepRun = 0;
+
+// The hooked slot must still be the world step: a world list, a small world count, a frame time and a substep count.
+bool StepArgsOk(void** worlds, int count, float dt, int substeps) {
+  return count >= 0 && count <= 4096 && (count == 0 || worlds) && std::isfinite(dt) && dt >= 0.0f && dt <= 1.0f && substeps >= 0 &&
+         substeps <= 256;
+}
 
 void* StepHooked(void* self, void** worlds, int count, float dt, int substeps, bool b, void* p) {
   // Fallbacks, on the game's main thread: the console command (if it could not be registered at startup) and cl_phys_timescale.
@@ -566,6 +621,11 @@ void* StepHooked(void* self, void** worlds, int count, float dt, int substeps, b
   if (!g_physCvar.load(std::memory_order_relaxed) && (g_physCvarTries++ & 63) == 0) FindPhysCvar();
 
   if (g_health.load(std::memory_order_relaxed) != kReady) return o_step(self, worlds, count, dt, substeps, b, p);
+  if (!StepArgsOk(worlds, count, dt, substeps)) {
+    if (++g_badStepRun > 64) Critical("physics step interface changed (the hooked function gets unexpected arguments)");
+    return o_step(self, worlds, count, dt, substeps, b, p);
+  }
+  g_badStepRun = 0;
   const int epoch = g_epoch.load(std::memory_order_relaxed);
   if (g_clk.epoch != epoch) {
     const bool playing = g_clk.playing, paused = g_clk.paused;
@@ -608,13 +668,13 @@ void PrintStatus() {
     return;
   }
   if (health == kDisabled) {
-    Con("v%s DISABLED: %s\n", kVersion, g_disableReason);
-    Con("  CS2 physics run unmodified. The game was probably updated and this version of the fix needs an update.\n");
+    Con("v%s OFF - CRITICAL ERROR: %s\n", kVersion, g_disableReason);
+    Con("  CS2 physics run unmodified. A CS2 update changed a part this fix depends on, so the fix needs an update.\n");
     return;
   }
   const bool on = g_on.load();
-  Con("v%s ACTIVE on a %s CS2 build - %s\n", kVersion, g_buildVerified.load() ? "tested" : "untested (self-check passed)",
-      on ? "on (ragdoll physics follow demo time)" : "off (vanilla CS2 physics)");
+  Con("v%s ACTIVE - %s\n", kVersion, on ? "on (ragdoll physics follow demo time)" : "off (vanilla CS2 physics)");
+  if (!g_fracOk.load()) Con("  WARNING: client globals not usable - %s\n", kNoFracEffect);
   Con("  console command registered %s\n", g_cmdWhere.load());
   const DemoView& v = g_clk.last;
   if (!g_clk.playing) {
@@ -736,11 +796,9 @@ DWORD WINAPI InitThread(LPVOID) {
   HMODULE vphys = WaitForModule(L"vphysics2.dll", 10, "vphysics2.dll");
   g_waitingFor = "the game interfaces";
 
-  Con("v%s loading\n", kVersion);
-  g_buildVerified = Stamp(client) == kClientStamp && Stamp(g_engine2) == kEngine2Stamp && Stamp(vphys) == kVphysics2Stamp;
-  if (!g_buildVerified)
-    Con("this CS2 build differs from the tested one (client %08x, engine2 %08x, vphysics2 %08x) - checking the game structures\n",
-        Stamp(client), Stamp(g_engine2), Stamp(vphys));
+  // The build IDs are only printed, to make bug reports easier. Any build is accepted.
+  Con("v%s loading (CS2 build: client %08x, engine2 %08x, vphysics2 %08x)\n", kVersion, Stamp(client), Stamp(g_engine2),
+      Stamp(vphys));
 
   g_engine = WaitForInterface("engine2.dll", "Source2EngineToClient001", 60000);
   uintptr_t engVt = 0;
@@ -753,17 +811,29 @@ DWORD WINAPI InitThread(LPVOID) {
                       Rd(physVt + kPhysStepWorlds * 8, stepFn) && stepFn;
   const bool stepForeign = physOk && !SectionRange(vphys, ".text").has(stepFn);
 
-  g_globalsVar = SigTarget(client, kSigGlobals, 0x36, 0x3a);
-  uintptr_t globalsProbe = 0;
-  const bool globalsOk = g_globalsVar && ImageRange(client).has(g_globalsVar) && Rd(g_globalsVar, globalsProbe);
+  const Range clientData = SectionRange(client, ".data");
+  for (const char* sig : kSigGlobals) {
+    int votes = 0;
+    uintptr_t probe = 0;
+    const uintptr_t a = SigVote(client, sig, votes);
+    if (a && clientData.has(a) && Rd(a, probe)) {
+      g_globalsVar = a;
+      break;
+    }
+  }
+  const bool globalsOk = g_globalsVar != 0;
 
-  Con("self-check: demo interface %s | physics step %s | client globals %s | console command %s\n", engineOk ? "ok" : "FAIL",
-      physOk ? "ok" : "FAIL", globalsOk ? "ok" : "FAIL",
-      g_cmdRegistered.load() ? "ok" : g_cvar.load() ? "waiting for the game" : "FAIL (cvar system not found)");
+  // Critical = the fix cannot work without it. Warning = the fix works with less.
+  Con("self-check: demo interface %s | physics step %s | client globals %s | console command %s\n",
+      engineOk ? "ok" : "CRITICAL ERROR", physOk ? "ok" : "CRITICAL ERROR", globalsOk ? "ok" : "WARNING",
+      g_cmdRegistered.load() ? "ok" : g_cvar.load() ? "waiting for the game" : "WARNING (cvar system not found)");
 
-  if (!engineOk) return Disable("the engine demo interface is not where expected"), 0;
-  if (!physOk) return Disable("the client physics step interface is not where expected"), 0;
-  if (!globalsOk) return Disable("the client globals signature was not found"), 0;
+  if (!engineOk) return Critical("engine demo interface changed (Source2EngineToClient001 is not where expected)"), 0;
+  if (!physOk) return Critical("physics step interface changed (VPhysics2_Interface_001 is not where expected)"), 0;
+  if (!globalsOk) LoseFrac("client globals not found in client.dll");
+  if (!g_cvar.load())
+    Con("WARNING: cvar system not found - no %s console command, and cl_phys_timescale is assumed to be 1. The fix itself still "
+        "works.\n", kCommandName);
   if (stepForeign) {
     char owner[MAX_PATH];
     OwnerModuleName(stepFn, owner, sizeof(owner));
@@ -775,7 +845,7 @@ DWORD WINAPI InitThread(LPVOID) {
   o_step = (StepFn)stepFn;
   g_health = kReady;
   if (!PatchPtr((void**)(physVt + kPhysStepWorlds * 8), (void*)&StepHooked, nullptr)) {
-    Disable("could not install the physics step hook");
+    Critical("could not install the physics step hook (memory protection)");
     return 0;
   }
   Con("v%s ACTIVE - demo ragdolls stay still while the demo is paused. Type %s in the console for status and options.\n", kVersion,

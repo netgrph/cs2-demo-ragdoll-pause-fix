@@ -41,8 +41,9 @@ mirv_ragdollfix verbose <0|1>    print pause / resume / seek messages (default 0
 
 ## Notes
 
-- Built and tested against CS2 `client.dll 0x6aa1ae5e` with HLAE 2.192.2. On another build the DLL checks the game's structures
-  first; if they moved it switches itself off and prints why, instead of crashing.
+- Tested on the October 6, 2026 CS2 update (1.41.8.9) with HLAE 2.192.2. There is no game version check: on every start the DLL
+  checks the game parts it needs. If a CS2 update changed one of them, it prints a `CRITICAL ERROR` naming the part and switches
+  itself off instead of crashing. Optional parts only print a `WARNING`, and the fix keeps working.
 - Load only one ragdoll fix at a time. If something else already hooks the physics step, it warns you and names the module.
 - It only acts during demo playback, and does nothing at all outside `cs2.exe`.
-- Known limit: seeking across a death still leaves a ragdoll that moves on unpause. See `../../research/PAPER.md`.
+- Known limit: seeking across a death still leaves a ragdoll that moves on unpause.

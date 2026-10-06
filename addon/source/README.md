@@ -28,8 +28,9 @@ The rest of the file is the plumbing needed to do that safely:
 - **The console command.** `mirv_ragdollfix` is registered by hooking `ICvar::RegisterConCommand` (slot 42) and registering right
   after one of the game's own commands, on the game's own thread; the hook then removes itself. Fallbacks: a retry from the physics
   step, and direct registration when loaded into a running game by `mirv_loadlibrary`.
-- **Self-checks.** Build stamps, interface vtables inside their own module's `.text`, and a signature scan for the client globals.
-  Anything that fails disables the fix with a message rather than guessing. All game memory reads go through SEH.
+- **Self-checks, no version lock.** Any CS2 build is accepted (the build stamps are only printed). Interface vtables must sit inside
+  their own module's `.text`; the client globals pointer is the address most matches of two short signatures agree on; demo tick
+  and physics step arguments must stay plausible at runtime. A missing or changed critical part (demo interface, physics step)
+  prints `CRITICAL ERROR` and switches the fix off; missing optional parts (client globals, cvar system) print `WARNING` and the
+  fix keeps working with less. All game memory reads go through SEH.
 - **One copy per process**, enforced with a named mutex, and a warning if another module already hooks the physics step.
-
-Full background, measurements and the reasoning behind the tolerances: `../../research/PAPER.md`.
