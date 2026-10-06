@@ -73,9 +73,12 @@ https://github.com/user-attachments/assets/e6a549bc-0e41-4090-bfdb-08b40d7cb338
 
 ## Compatibility
 
-Confirmed to work on the current **October 6, 2026** build of the game.
+| RagdollPauseFix | Made for CS2 version |
+| --- | --- |
+| **v1.0.1** | **October 6, 2026** (1.41.8.9), built to keep working on future updates |
+| v1.0.0 | September 10, 2026 (1.41.8.1) only |
 
-I have not tested this on older game versions, so I cannot confirm that everything works correctly on them.
+I have not tested it on game versions older than September 10, 2026, so I cannot confirm that everything works correctly on them.
 
 ## Disclaimer
 
