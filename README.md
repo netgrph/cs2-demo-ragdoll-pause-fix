@@ -73,7 +73,7 @@ https://github.com/user-attachments/assets/e6a549bc-0e41-4090-bfdb-08b40d7cb338
 
 ## Compatibility
 
-Confirmed to work on the current **September 10, 2026** build of the game.
+Confirmed to work on the current **October 6, 2026** build of the game.
 
 I have not tested this on older game versions, so I cannot confirm that everything works correctly on them.
 
